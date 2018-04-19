@@ -29,7 +29,7 @@ for i =8:numsubs        % for each subject
     %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%% REPLACE THE LINE BELOW WITH YOUR FUNCTION CALL for runProject1! %%
     
-    [estdiag(i,:), estmaskleft,estmaskright] = runProject1(mammoimgleft,mammoimgright);
+    [estdiag(i,:), estmaskleft,estmaskright] = runProject1_TA(mammoimgleft,mammoimgright);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     

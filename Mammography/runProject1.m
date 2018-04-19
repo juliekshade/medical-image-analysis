@@ -17,7 +17,6 @@
 %                            values of 0. Should be of size (rowR x colR).
 %
 
-
 % MAKE UP SOME BAD RESULTS FOR TESTING :)
 estdiag = zeros(1,2);
 estmaskleft = zeros(size(mammoimgleft));
@@ -27,6 +26,9 @@ estmaskright = zeros(size(mammoimgright));
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % My tesging code randomly diagnose the images and labels 10% of the pixels
 % as 1 if the diagnosis is not healthy.
+% TODO: diagnose image
+S = 4 % number of scales
+
 diag = [0,1,2];
 estpos = randi(length(diag),[1,2]);
 estdiag = diag(estpos);
@@ -34,7 +36,7 @@ estdiag = diag(estpos);
 % Left side
 if estdiag(1) ~= 0
     % TODO: find estimated mask for left side breast
-    estmaskleft( rand(size(estmaskleft)) < 0.1 ) = 1;
+    estmaskleft(rand(size(estmaskleft)) < 0.1 ) = 1;
 end
 % Right side
 if estdiag(2) ~= 0

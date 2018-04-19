@@ -16,11 +16,18 @@ orientations = [0:180/11:180]
 S = [4:2:10]
 
 for i =1 % use 17 subjects for training and 4 for testing later (outer CV loop) 
-    % just read in all training images one at a time- apply and save gabor
-    % output?
+
     t = train(i)
     mammoimgleft(:,:) = imread([datatopdir,sublist(t,:) '_LEFT.png']);
     mammoimgright(:,:) = imread([datatopdir,sublist(t,:) '_RIGHT.png']);
+    % segment breast region first? or crop and enhance
+    % try hough transform
+    % assume at least 10x10 px of top left are pectoral
+    x = size(mammoimgleft
+    N1 = [0 0]
+    N2 = [0 min(find(mammoimgleft(50,:)<mean(mean(mammoimgleft(50:100,50:100)))/3.0))]
+    N3 = [min(find(mammoimgleft(:,50)<mean(mean(mammoimgleft(50:100,50:100)))/3.0)) 0]
+    
     % gabor filter on one at a time
     for k = orientations(1)
         j = 1

@@ -15,7 +15,9 @@ train = randperm(numsubs)
 orientations = [0:180/11:180]
 S = [4:2:10]
 imscale = .2
-se = strel('disk',100*imscale*5)
+se = strel('disk',50*imscale*5)
+interplinelen = imscale*400
+bins = 0:.05:1
 
 % loop below only collects features for the patients
 for i = 1 % use 18 subjects for training and 3 for testing later (outer CV loop) 
@@ -37,23 +39,43 @@ for i = 1 % use 18 subjects for training and 3 for testing later (outer CV loop)
     hold on
     [C,h] = imcontour(BW,1,'r');
     
-        % TODO: expand g_open by normal line seg analysis
-    for j = 1:3
-        1
+    % TODO: expand g_open by normal line seg analysis- right now g_open too
+    % small
+    cx = C(1,2:end);
+    cy = C(2,2:end);
+    boundapprox = []
+    for j = 1:2:size(cx,2)-1
+        x1 = cx(j);
+        x2 = cx(j+2);
+        y1 = cy(j);
+        y2 = cy(j+2);
+        mid = [(x1+x2)/2, (y1+y2)/2];
+        len = pdist([x1,y1;x2,y2],'euclidean')/2;
+        h = sqrt(interplinelen^2 + len^2);
+        y3 = mid(2) + (len^2 + h^2 - interplinelen^2)/(2*len);
+        x3 = mid(1) + sqrt(h^2-((len^2 + h^2 - interplinelen^2)/(2*len))^2);
+        l = improfile(g_norm, [mid(1) x3], [mid(2) y3]);
+        [m,index] = max(histcounts(l,bins));
+        newinterplinelen = min(find(l<bins(index+1)));
+        boundapprox(2,(j+1)/2) = mid(2) + (len^2 + h^2 - newinterplinelen^2)/(2*len);
+        boundapprox(1,(j+1)/2) = mid(1) + sqrt(h^2-((len^2 + h^2 - interplinelen^2)/(2*len))^2);
+     %   derivpts = contourpts()
+      %  x = h.XData
+        %l = improfile(g_norm
     end
-    N1 = [1 1]
-    N2 = [1 max(find(h.ZData(1,:)>0))]
-    N5 = [max(find(h.ZData(:,1)>0)) 1]
-    N3 = [N5(1)/2 1]
-    N4 = [N3(1) N2(2)]
+    bound = boundary(boundapprox(1,:), boundapprox(2,:)
+    N1 = [1 1];
+    N2 = [1 max(find(h.ZData(1,:)>0))];
+    N5 = [max(find(h.ZData(:,1)>0)) 1];
+    N3 = [N5(1)/2 1];
+    N4 = [N3(1) N2(2)];
     % find hough transform
     pecROI = g_norm(1:N4(1),1:N4(2));
     [H,T,R] = hough(pecROI,'Theta',30:1:80);
-    P  = houghpeaks(H,1);
+    P  = houghpeaks(H,100);
 
-lines = houghlines(pecROI,T,R,P,'FillGap',5,'MinLength',sqrt(2)*N4(2));
+lines = houghlines(pecROI,T,R,P,'MinLength',sqrt(2)*N4(2));
 %figure(3), imshow(pecROI,[0 1]), hold on
-max_len = 0;
 for k = 1:length(lines)
    xy = [lines(k).point1; lines(k).point2];
    plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','green');
@@ -62,12 +84,6 @@ for k = 1:length(lines)
    plot(xy(1,1),xy(1,2),'x','LineWidth',2,'Color','yellow');
    plot(xy(2,1),xy(2,2),'x','LineWidth',2,'Color','red');
 
-   % Determine the endpoints of the longest line segment
-   len = norm(lines(k).point1 - lines(k).point2);
-   if ( len > max_len)
-      max_len = len;
-      xy_long = xy;
-   end
 end
     % crop image to ROI
 

@@ -12,51 +12,69 @@ numsubs = length(sublist);
 truediag = alllist(2:end,2:3);
 truediag = cell2mat(truediag);
 
-train = randperm(numsubs);
+% FUNCTION FOR PROCESSING IMAGES. RETURNS
+function [processR, processL, pecR, pecL, maskR, maskL] = ...
+    mammo_preprocess(mammoimgleft,mammoimgright,displ=0)
+% datatopdir = name of directory to process data from
+% sublist = name of each file
+% t = number of file in list to process
+% displ = indicates whether output should be plotted
+
 imscale = .15;
 se = strel('disk',imscale*260);
 interplinelen = imscale*1200;
 bins = 0:.05:1;
-tic;
-% loop below only collects features for the patients
-for i = 21 % use 18 subjects for training and 3 for testing later (outer CV loop) 
-    t = train(i);
-    mammoimgleft = imread([datatopdir,sublist(t,:) '_LEFT.png']);
-    mammoimgright = imread([datatopdir,sublist(t,:) '_RIGHT.png']);
-    % TODO: mirror image for right and make this a loop
-    % TODO: move preprocessing stuff to another file
+mammoimgright = flipdim(mammoimgright,2);
+
+for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loop) 
+    % determine which image to process (R or L breast)
+    if i == 2
+        mammoimg = mammoimgleft;
+    else
+        mammoimg = mammoimgright;
+    end
     
-    mammoimgleft_scale = double(imresize(mammoimgleft, imscale));
-    mammoimgleft_scale = mat2gray(mammoimgleft_scale(imscale*100:end-imscale*100,...
-        imscale*100:end-imscale*100)); % crop edges b/c artifacts 
-    [r,c] = size(mammoimgleft_scale);
-    % try to outline breast boundary: modified traditional active contour
-    g = log(1+mammoimgleft_scale);
+    % rescale, crop, and enhance image for processing
+    mammoimg_scale = double(imresize(mammoimg, imscale));
+    mammoimg_scale = mat2gray(mammoimg_scale(imscale*100:end-imscale*100,...
+        imscale*100:end-imscale*100)); 
+    [r,c] = size(mammoimg_scale);
+    g = log(1+mammoimg_scale);
     g_norm = mat2gray(g);
-    level = graythresh(g_norm(find(g_norm>0))); % eliminate deidentification artifacts
+    
+    % eliminate deidentification artifacts and binarize image using Otsu
+    level = graythresh(g_norm(find(g_norm>0))); 
     BW = imbinarize(g_norm,level);
     BW = imopen(BW,se); % remove text artifacts
-    stats = regionprops(BW,'Extrema'); % make sure only one region contoured or join 2 if mult
+    
+    % sometimes selcts pectoral + breast separately: merge if this happens
+    stats = regionprops(BW,'Extrema'); 
     stats = cat(2, stats.Extrema);
-   	if size(stats,2) > 2  % segmented into multiple regions - start w 2, assume biggest 2
+   	if size(stats,2) > 2  
         pt1 = ceil(stats(5,1:2));
         pt2 = ceil(stats(3,3:4));
         pt3 = ceil(stats(8,3:4));
         BW = BW + poly2mask([.5 pt1(1) pt2(1) pt2(1) .5],...
         [pt1(2)-1 pt1(2)-1 pt2(2) pt3(2) pt3(2)], r, c)~=0;
     end
-
-    figure(i) % show boob to check
-    imshow(mammoimgleft_scale, [0 1])
-    hold on
-    [C,h] = imcontour(BW,1,'r');
     
+    % create initial contour and display to check accuracy if desired
+    if displ==1
+        figure(i) % show boob to check
+        imshow(mammoimg_scale, [0 1])
+        hold on
+        [C,h] = imcontour(BW,1,'r');
+    end
+    C = contourc(double(BW),1)
     cx = C(1,2:end);
     cy = C(2,2:end);
+    
+    % normal line segment analysis on originial contour with imscale*500 lines
     npts = imscale*500;
     ptspace = int16(C(2,1)/npts);
     boundapprox = zeros(npts,2);
-    for j = 1:ptspace:C(2,1)-3 % normal line segment analysis
+    dontinclude = [];
+    for j = 1:ptspace:C(2,1)-3 
         x1 = cx(j);
         x2 = cx(j+2);
         y1 = cy(j);
@@ -85,7 +103,9 @@ for i = 21 % use 18 subjects for training and 3 for testing later (outer CV loop
         if sum(l<bins(index+1))==0
             newinterplinelen = max(find(l>0));
         end
-
+        if newinterplinelen < 5
+            dontinclude = [dontinclude (j+ptspace-1)/ptspace];
+        end
         hnew = sqrt(newinterplinelen^2 + len^2);
         if x2-x1 >= 0 & y2-y1 >= 0
             boundapprox((j+ptspace-1)/ptspace,2) = mid(2) + newinterplinelen*cos(-2*acos(len/hnew)-acos(abs(x1-x2)/(2*len)));
@@ -102,6 +122,9 @@ for i = 21 % use 18 subjects for training and 3 for testing later (outer CV loop
         end
 
     end
+    if size(dontinclude,1) > 0
+        boundapprox(dontinclude,:) = [];
+    end
     boundapprox = int16(boundapprox);
     boundapprox(boundapprox(:,1)<1,2)=1;
     boundapprox(boundapprox(:,1)>c,1)=c;
@@ -117,18 +140,22 @@ for i = 21 % use 18 subjects for training and 3 for testing later (outer CV loop
     boundapprox(end,2) = boundapprox(end-1,2);
     
     % add result of normal line segment analysis to plot
-    scatter(boundapprox(:,1),boundapprox(:,2));
-
+    if displ == 1
+        scatter(boundapprox(:,1),boundapprox(:,2));
+    end
+    
     % create smooth contour based on normal line segment analysis
     windowWidth = imscale*160-1;
     polynomialOrder = 2;
-    smoothX = [sgolayfilt(boundapprox(:,1), polynomialOrder, windowWidth); 1];
-    smoothY = [1; sgolayfilt(boundapprox(:,2), polynomialOrder, windowWidth)];
+    smoothX = [sgolayfilt(boundapprox(:,1), polynomialOrder, windowWidth); .5];
+    smoothY = [.5; sgolayfilt(boundapprox(:,2), polynomialOrder, windowWidth)];
     smoothX = [smoothX(1); smoothX];
     smoothY = [smoothY; smoothY(end)];
     
     % plot this smooth contour
-    plot(smoothX,smoothY);
+    if displ == 1
+        plot(smoothX,smoothY);
+    end
     
     % determine critical points for hough transform
     N1 = [1 1];
@@ -142,6 +169,7 @@ for i = 21 % use 18 subjects for training and 3 for testing later (outer CV loop
     [H,T,R] = hough(pecROI,'Theta',20:1:80);
     P  = houghpeaks(H,100);
     lines = houghlines(pecROI,T,R,P);
+    
     % remove lines that don't intersect N2-N3
     toremove = [];
     for k = 1:length(lines)
@@ -151,6 +179,8 @@ for i = 21 % use 18 subjects for training and 3 for testing later (outer CV loop
        end
     end
     lines(toremove) = [];
+    
+    % find best guess of line defining pectoral muscle
     bestline=1;
     intensitymax = 0;
     for k = 1:length(lines)     
@@ -163,21 +193,50 @@ for i = 21 % use 18 subjects for training and 3 for testing later (outer CV loop
         end
     end
     xy = [lines(bestline).point1; lines(bestline).point2];
-    plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','blue');
-    % Plot beginnings and end of best line
-    plot(xy(1,1),xy(1,2),'x','LineWidth',2,'Color','yellow');
-    plot(xy(2,1),xy(2,2),'x','LineWidth',2,'Color','red');
+    if displ == 1
+        plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','blue');
+        plot(xy(1,1),xy(1,2),'x','LineWidth',2,'Color','yellow');
+        plot(xy(2,1),xy(2,2),'x','LineWidth',2,'Color','red');
+    end
     
     % find breastMask
     breastMask = zeros(r,c);
     breastMask(poly2mask([.5; smoothX],[.5; smoothY],r,c))=1;
     
-    maskBreast = g_norm.*breastMask;
-   %TODO: density correction in breast margin
-    D = bwdist(imcomplement(breastMask))
-    imshow(D,[0 90])
-    hold on
-    [C,h] = imcontour(D,10)
+    % density correction in breast margin
+    D = bwdist(imcomplement(breastMask));
+    ncont = imscale*300;
+    C = contourc(double(D), 0:1:ncont);
+    contlevels = zeros(1,int16(ncont));
+    distancelevels = zeros(1,int16(ncont));
+    ind1 = 1;
+    for j = 1:ncont
+        npts = C(2,ind1);
+        distancelevels(j) = C(1,ind1);
+        contlevels(j) = mean(mean(g_norm(round(C(:,ind1+1:npts+ind1)))));
+        ind1 = npts+ind1+1;
+    end
+    inside = mean(contlevels(ncont*2/3:end));
+    p = polyfit(distancelevels(1:ncont),contlevels(1:ncont),8);
+ 
+    % create enhancement mask
+    enhancementmask = inside - polyval(p,D);
+    enhancementmask(D>distancelevels(ncont)) = 0;
+    g_norm_enhanced = g_norm+enhancementmask;
+    maskBreastEnhanced = g_norm_enhanced.*breastMask;
+    if displ == 1
+        figure(i+21)
+        imshow(maskBreastEnhanced)
+    end
+    if i == 1
+        maskR = breastMask;
+        processR = maskBreastEnhanced;
+        pecR = xy;
+    else
+        maskL = breastMask;
+        processL = maskBreastEnhanced;
+        pecL = xy;
+    end
 end
 toc;
 % RETURN: breast mask, corrected image, and pectoral muscle line?

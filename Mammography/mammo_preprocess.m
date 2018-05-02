@@ -1,39 +1,16 @@
+function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
+    % datatopdir = name of directory to process data from
+    % sublist = name of each file
+    % t = number of file in list to process
+    % displ = indicates whether output should be plotted
 
-clear all
-clc;
-datatopdir = './MammoTraining/';  
-sublistfile = fullfile(['./Project1List.xlsx']);
-rng(1);
+%     if displ == 0
+%         set(0,'DefaultFigureVisible','off');
+%     end
+    se = strel('disk',round(imscale*260));
+    interplinelen = imscale*1200;
+    bins = 0:.05:1;
 
-[~,~,alllist] = xlsread(sublistfile);
-sublist = alllist(2:end,1);
-sublist = num2str(cell2mat(sublist));
-numsubs = length(sublist);
-truediag = alllist(2:end,2:3);
-truediag = cell2mat(truediag);
-
-% FUNCTION FOR PROCESSING IMAGES. RETURNS
-function [processR, processL, pecR, pecL, maskR, maskL] = ...
-    mammo_preprocess(mammoimgleft,mammoimgright,displ=0)
-% datatopdir = name of directory to process data from
-% sublist = name of each file
-% t = number of file in list to process
-% displ = indicates whether output should be plotted
-
-imscale = .15;
-se = strel('disk',imscale*260);
-interplinelen = imscale*1200;
-bins = 0:.05:1;
-mammoimgright = flipdim(mammoimgright,2);
-
-for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loop) 
-    % determine which image to process (R or L breast)
-    if i == 2
-        mammoimg = mammoimgleft;
-    else
-        mammoimg = mammoimgright;
-    end
-    
     % rescale, crop, and enhance image for processing
     mammoimg_scale = double(imresize(mammoimg, imscale));
     mammoimg_scale = mat2gray(mammoimg_scale(imscale*100:end-imscale*100,...
@@ -41,34 +18,32 @@ for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loo
     [r,c] = size(mammoimg_scale);
     g = log(1+mammoimg_scale);
     g_norm = mat2gray(g);
-    
+
     % eliminate deidentification artifacts and binarize image using Otsu
     level = graythresh(g_norm(find(g_norm>0))); 
     BW = imbinarize(g_norm,level);
     BW = imopen(BW,se); % remove text artifacts
-    
+
     % sometimes selcts pectoral + breast separately: merge if this happens
     stats = regionprops(BW,'Extrema'); 
     stats = cat(2, stats.Extrema);
-   	if size(stats,2) > 2  
+    if size(stats,2) > 2  
         pt1 = ceil(stats(5,1:2));
         pt2 = ceil(stats(3,3:4));
         pt3 = ceil(stats(8,3:4));
         BW = BW + poly2mask([.5 pt1(1) pt2(1) pt2(1) .5],...
         [pt1(2)-1 pt1(2)-1 pt2(2) pt3(2) pt3(2)], r, c)~=0;
     end
-    
+
     % create initial contour and display to check accuracy if desired
-    if displ==1
-        figure(i) % show boob to check
-        imshow(mammoimg_scale, [0 1])
-        hold on
-        [C,h] = imcontour(BW,1,'r');
-    end
-    C = contourc(double(BW),1)
+%     h(1) = figure; % show boob to check
+%     imshow(mammoimg_scale, [0 1]);
+%     hold on
+     [C,h] = imcontour(BW,1,'r');
+
     cx = C(1,2:end);
     cy = C(2,2:end);
-    
+
     % normal line segment analysis on originial contour with imscale*500 lines
     npts = imscale*500;
     ptspace = int16(C(2,1)/npts);
@@ -103,7 +78,7 @@ for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loo
         if sum(l<bins(index+1))==0
             newinterplinelen = max(find(l>0));
         end
-        if newinterplinelen < 5
+        if newinterplinelen < 3
             dontinclude = [dontinclude (j+ptspace-1)/ptspace];
         end
         hnew = sqrt(newinterplinelen^2 + len^2);
@@ -120,11 +95,10 @@ for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loo
             boundapprox((j+ptspace-1)/ptspace,2) = mid(2) - newinterplinelen*cos(-2*acos(len/hnew)-acos(abs(x1-x2)/(2*len)));
             boundapprox((j+ptspace-1)/ptspace,1) = mid(1) - newinterplinelen*sin(-2*acos(len/hnew)-acos(abs(x1-x2)/(2*len)));
         end
-
-    end
-    if size(dontinclude,1) > 0
-        boundapprox(dontinclude,:) = [];
-    end
+    end    
+    if size(dontinclude,1) > 0 
+      boundapprox(dontinclude,:) = []; 
+    end 
     boundapprox = int16(boundapprox);
     boundapprox(boundapprox(:,1)<1,2)=1;
     boundapprox(boundapprox(:,1)>c,1)=c;
@@ -134,42 +108,39 @@ for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loo
         boundapprox(1,2) = 1;
         boundapprox(1,1) = boundapprox(find(min(boundapprox(:,2))),1);
     end
-    [C,ia,ic] = unique(boundapprox(:,1),'stable');
+
+    [~,ia,~] = unique(boundapprox(:,1),'stable');
     boundapprox = double(boundapprox(ia,:));
     boundapprox(end,1) = 1;
     boundapprox(end,2) = boundapprox(end-1,2);
-    
+
     % add result of normal line segment analysis to plot
-    if displ == 1
-        scatter(boundapprox(:,1),boundapprox(:,2));
-    end
-    
+%     scatter(boundapprox(:,1),boundapprox(:,2));
+
     % create smooth contour based on normal line segment analysis
-    windowWidth = imscale*160-1;
+    windowWidth = 2*floor(imscale*160)+1;
     polynomialOrder = 2;
     smoothX = [sgolayfilt(boundapprox(:,1), polynomialOrder, windowWidth); .5];
     smoothY = [.5; sgolayfilt(boundapprox(:,2), polynomialOrder, windowWidth)];
     smoothX = [smoothX(1); smoothX];
     smoothY = [smoothY; smoothY(end)];
-    
+
     % plot this smooth contour
-    if displ == 1
-        plot(smoothX,smoothY);
-    end
-    
+%     plot(smoothX,smoothY);
+
     % determine critical points for hough transform
     N1 = [1 1];
-    N2 = [1 smoothX(1,1)];
+    N2 = [1 smoothX(1)];
     N5 = [smoothY(end) 1];
     N3 = [N5(1)*2/3 1];
     N4 = [N3(1) N2(2)];
-    
+
     % find hough transform
     pecROI = g_norm(1:N4(1),1:N4(2));
     [H,T,R] = hough(pecROI,'Theta',20:1:80);
     P  = houghpeaks(H,100);
     lines = houghlines(pecROI,T,R,P);
-    
+
     % remove lines that don't intersect N2-N3
     toremove = [];
     for k = 1:length(lines)
@@ -179,7 +150,7 @@ for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loo
        end
     end
     lines(toremove) = [];
-    
+
     % find best guess of line defining pectoral muscle
     bestline=1;
     intensitymax = 0;
@@ -193,16 +164,16 @@ for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loo
         end
     end
     xy = [lines(bestline).point1; lines(bestline).point2];
-    if displ == 1
-        plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','blue');
-        plot(xy(1,1),xy(1,2),'x','LineWidth',2,'Color','yellow');
-        plot(xy(2,1),xy(2,2),'x','LineWidth',2,'Color','red');
-    end
-    
+%     if displ == 1
+%         plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','blue');
+%         plot(xy(1,1),xy(1,2),'x','LineWidth',2,'Color','yellow');
+%         plot(xy(2,1),xy(2,2),'x','LineWidth',2,'Color','red');
+%     end
+
     % find breastMask
     breastMask = zeros(r,c);
     breastMask(poly2mask([.5; smoothX],[.5; smoothY],r,c))=1;
-    
+
     % density correction in breast margin
     D = bwdist(imcomplement(breastMask));
     ncont = imscale*300;
@@ -218,26 +189,26 @@ for i = 1:2 % use 18 subjects for training and 3 for testing later (outer CV loo
     end
     inside = mean(contlevels(ncont*2/3:end));
     p = polyfit(distancelevels(1:ncont),contlevels(1:ncont),8);
- 
+
     % create enhancement mask
     enhancementmask = inside - polyval(p,D);
     enhancementmask(D>distancelevels(ncont)) = 0;
     g_norm_enhanced = g_norm+enhancementmask;
     maskBreastEnhanced = g_norm_enhanced.*breastMask;
-    if displ == 1
-        figure(i+21)
-        imshow(maskBreastEnhanced)
-    end
-    if i == 1
-        maskR = breastMask;
-        processR = maskBreastEnhanced;
-        pecR = xy;
-    else
-        maskL = breastMask;
-        processL = maskBreastEnhanced;
-        pecL = xy;
-    end
+
+%     h(1) = figure;
+%     imshow(maskBreastEnhanced)
+
+    mask = breastMask;
+    process = maskBreastEnhanced;
+    pec = xy;
+    
+%     if displ == 1
+%         figure(1)
+%         figure(2)
+%     end
 end
+
 
 
 

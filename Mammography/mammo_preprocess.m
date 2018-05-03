@@ -118,7 +118,7 @@ function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
 %     scatter(boundapprox(:,1),boundapprox(:,2));
 
     % create smooth contour based on normal line segment analysis
-    windowWidth = 2*floor(imscale*160)+1;
+    windowWidth = 2*floor(imscale*80)+1;
     polynomialOrder = 2;
     smoothX = [sgolayfilt(boundapprox(:,1), polynomialOrder, windowWidth); .5];
     smoothY = [.5; sgolayfilt(boundapprox(:,2), polynomialOrder, windowWidth)];
@@ -145,12 +145,14 @@ function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
     toremove = [];
     for k = 1:length(lines)
        xy = [lines(k).point1; lines(k).point2];
-       if xy(1,2) ~= 1 || xy(2,1) ~=1
+       if xy(1,2) > 1 || xy(2,1) > 1
            toremove = [toremove k];
        end
     end
-    lines(toremove) = [];
-
+    if size(toremove) < length(lines)
+        lines(toremove) = [];
+    end
+    
     % find best guess of line defining pectoral muscle
     bestline=1;
     intensitymax = 0;

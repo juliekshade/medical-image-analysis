@@ -186,7 +186,7 @@ function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
     for j = 1:ncont
         npts = C(2,ind1);
         distancelevels(j) = C(1,ind1);
-        contlevels(j) = mean(mean(g_norm(round(C(:,ind1+1:npts+ind1)))));
+        contlevels(j) = mean(mean(mammoimg_scale(round(C(:,ind1+1:npts+ind1)))));
         ind1 = npts+ind1+1;
     end
     inside = mean(contlevels(ncont*2/3:end));
@@ -195,9 +195,9 @@ function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
     % create enhancement mask
     enhancementmask = inside - polyval(p,D);
     enhancementmask(D>distancelevels(ncont)) = 0;
-    g_norm_enhanced = g_norm+enhancementmask;
-    maskBreastEnhanced = g_norm_enhanced.*breastMask;
-
+   mammoimgscale_enhanced = mammoimg_scale+enhancementmask;
+   % maskBreastEnhanced = g_norm_enhanced.*breastMask;
+    maskBreastEnhanced = mammoimgscale_enhanced.*breastMask;
 %     h(1) = figure;
 %     imshow(maskBreastEnhanced)
 

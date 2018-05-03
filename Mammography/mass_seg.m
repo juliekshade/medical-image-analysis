@@ -1,4 +1,4 @@
-% training script project 1 
+% find most likely thing to be a mass in each given image.
 clear all;
 clc;
 warning('off', 'all')
@@ -15,14 +15,31 @@ truediag = cell2mat(truediag);
 rng(1);
 
 tlist = randperm(numsubs); % random leave one out cross val ... later
-for i = 1:21  % process each subject and get feature vector for each
+for i = 7:21  % process each subject and get feature vector for each
+    % boobs w only tumors!
     %  part below will be passed to function as imput
-    t = tlist(i);
-    mammoimgleft = imread([datatopdir,sublist(t,:) '_LEFT.png']);
-    mammoimgright = imread([datatopdir,sublist(t,:) '_RIGHT.png']);
+    mammoimgleft = imread([datatopdir,sublist(i,:) '_LEFT.png']);
+    mammoimgright = imread([datatopdir,sublist(i,:) '_RIGHT.png']);
+        mammoimgright = flipdim(mammoimgright,2);
+
     [processR,pecR,breastmaskR] = mammo_preprocess(mammoimgright,.05,0);
     [processL,pecL,breastmaskL] = mammo_preprocess(mammoimgleft,.05,0);
-    % find most likely thing to be a mass in each image?
+    % input is thing above
+    
+    truemaskfile = [datatopdir sublist(i,:) '_LEFT_MASK.png'];
+    imscale=.05
+        truemask = imread(truemaskfile);
+        truemask = double(imresize(truemask, imscale));
+   truemask_scale = mat2gray(truemask(imscale*100:end-imscale*100,...
+        imscale*100:end-imscale*100)); 
+    L = 
+    imshow(truemask)
+    B = labeloverlay(Lenhance,truemask_scale)
+    Lenhance = adapthisteq(processL);
+    Renhance = adapthisteq(processR);
+    figure(i+21)
+    imshow(Lenhance)
+    % find most likely thing to be a mass in each image? 
 end
     
 function mask = mass_seg(mammoimg,pec,breastmask)

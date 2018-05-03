@@ -9,17 +9,15 @@ function [feat] = extract_feat(mammoimg, pec, breastmask, numscales, dtheta)
     wavelengthMin = 4/sqrt(2);
     wavelengthMax = hypot(r,c);
     n = floor(log2(wavelengthMax/wavelengthMin));
-    wavelength = 2.^(0:n/(numscales-1):n) * wavelengthMin;
+    wavelength = 1.6.^(0:n/(numscales-1):n) * wavelengthMin;
 
     orientation = 0:dtheta:(180-dtheta);
 
     g = gabor(wavelength,orientation);
     gabormag = imgaborfilt(mammoimg_crop,g);
-    size(gabormag)
-    size(mammoimg_crop)
+
     k_imgs = zeros(r*c,size(orientation,2));
     for k = 1:size(orientation,2)
-        (k*numscales)-numscales-1:k*numscales
         a = reshape(gabormag(:,:,(k*numscales)-numscales+1:k*numscales),[r*c,numscales]);
         [coeff,score,~,~,explained,~] = pca(a);
         sum_var = 0;
@@ -31,20 +29,20 @@ function [feat] = extract_feat(mammoimg, pec, breastmask, numscales, dtheta)
         Xcentered = score*coeff';
         k_imgs(:,k) = sum(Xcentered(:,1:it),2);
     end
- %   k_imgs=k_imgs./max(k_imgs);
+    
     % binarize images in mask area only - elim edge artifacts by mask
     D = bwdist(imcomplement(breastmask_crop));
     breastmask_crop = breastmask_crop.*(D>6);
     kthresh = zeros(r,c,size(orientation,2));
     for i = 1:size(orientation,2)
         thisimg = reshape(k_imgs(:,i),[r c]).*breastmask_crop;
-        [thresh(i),EM(i)] = graythresh(thisimg)
+        [thresh(i),EM(i)] = graythresh(thisimg);
         k_thresh(:,:,i) = thisimg;
     end
-    [m,I] = max(EM)
-    k_thresh=k_thresh>thresh(I)
-    figure;
-    imshow(sum(k_thresh,3));
+    [m,I] = max(EM);
+    k_thresh=k_thresh>thresh(I);
+%     figure;
+%     imshow(sum(k_thresh,3));
     s = sum(sum(k_thresh,1),2)./sum(sum(sum(k_thresh,1),2),3);
     feat = s(:);
 end

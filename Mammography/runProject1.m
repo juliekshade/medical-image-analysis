@@ -21,28 +21,48 @@
 estdiag = zeros(1,2);
 estmaskleft = zeros(size(mammoimgleft));
 estmaskright = zeros(size(mammoimgright));
+warning('off','all')
 
 %% PUT IN YOUR DIAGNOSIS AND SEGMENTATION CODE BELOW!
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % My tesging code randomly diagnose the images and labels 10% of the pixels
 % as 1 if the diagnosis is not healthy.
-% TODO: diagnose image
-S = 4 % number of scales
+rr = size(mammoimgright,1);
+rc = size(mammoimgright,2);
+lr = size(mammoimgleft,1);
+lc = size(mammoimgleft,2);
+% pre-process images
+mammoimgright = flipdim(mammoimgright,2);
+[processR,pecR,breastmaskR] = mammo_preprocess(mammoimgright,.08,0);
+[processL,pecL,breastmaskL] = mammo_preprocess(mammoimgleft,.08,0);
 
-diag = [0,1,2];
-estpos = randi(length(diag),[1,2]);
-estdiag = diag(estpos);
+% classify patient as cancer or no cancer?
+iscancer = classify_cancer(processL,processR,pecR,pecL,breastmaskL,breastmaskR);
+
+% if cancer, try to segment mass and return diagnosis
+if iscancer==1
+    [mask,diagL,diagR] = mass_seg(processL,processR,pecR,pecL,breastmaskL,breastmaskR);
+    if diagL >0
+        mask = imresize(mask,[lr lc]);
+    else
+        mask = imresize(mask,[rr rc]);
+    end
+    estdiag = [diagL diagR]
+else
+    estdiag = [0 0]
+end
 
 % Left side
 if estdiag(1) ~= 0
     % TODO: find estimated mask for left side breast
-    estmaskleft(rand(size(estmaskleft)) < 0.1 ) = 1;
+    estmaskleft = mask;
 end
 % Right side
 if estdiag(2) ~= 0
     % TODO: find estimated mask for right side breast
-    estmaskright( rand(size(estmaskright)) < 0.1 ) = 1;
+    estmaskright = mask;
 end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 

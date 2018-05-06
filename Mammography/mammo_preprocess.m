@@ -1,9 +1,6 @@
-function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
-    % datatopdir = name of directory to process data from
-    % sublist = name of each file
-    % t = number of file in list to process
-    % displ = indicates whether output should be plotted
 
+
+function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
 %     if displ == 0
 %         set(0,'DefaultFigureVisible','off');
 %     end
@@ -39,6 +36,7 @@ function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
 %     h(1) = figure; % show boob to check
 %     imshow(mammoimg_scale, [0 1]);
 %     hold on
+figure(1)
      [C,h] = imcontour(BW,1,'r');
 
     cx = C(1,2:end);
@@ -195,8 +193,7 @@ function [process, pec, mask] = mammo_preprocess(mammoimg,imscale,displ)
     % create enhancement mask
     enhancementmask = inside - polyval(p,D);
     enhancementmask(D>distancelevels(ncont)) = 0;
-   mammoimgscale_enhanced = mammoimg_scale+enhancementmask;
-   % maskBreastEnhanced = g_norm_enhanced.*breastMask;
+    mammoimgscale_enhanced = mammoimg_scale+enhancementmask;
     maskBreastEnhanced = mammoimgscale_enhanced.*breastMask;
 %     h(1) = figure;
 %     imshow(maskBreastEnhanced)
